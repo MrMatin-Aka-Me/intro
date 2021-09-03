@@ -9,19 +9,35 @@ const statusOk = 200;
 let nextId = 1;
 const posts = [];
 
-const methods = new Map();
-methods.set('/posts.get', function(request, response){
-    response.writeHead(statusOk, {'Content-Type': 'application/json'});
-    response.end(JSON.stringify(posts));
-});
-methods.set('/posts.getById', function(request, response){});
-methods.set('/posts.post', function(request, response){
-    const url = new URL(request.url, `http://${request.headers.host}`);
-    const searchParams = url.searchParams;
+function sendResponse(response, {status = statusOk, headers = {}, body = null}) {
+    Object.entries(headers).forEach(function([key, value]){
+        response.setHeader(key, value);
+    });
+    response.writeHead(status);
+    response.end(body);
+}
 
+function sendJSON(response, body) {
+    sendResponse(response, {
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+    });
+}
+
+const methods = new Map();
+methods.set('/posts.get', function({response}){
+    sendJSON(response, posts);
+});
+
+methods.set('/posts.getById', function({response, searchParams}){
+    
+});
+
+methods.set('/posts.post', function({response, searchParams}){
     if (!searchParams.has('content')){
-        response.writeHead(statusBadRequest);
-        response.end();
+        sendResponse(response, {status: statusBadRequest});
         return;
     }
 
@@ -33,25 +49,30 @@ methods.set('/posts.post', function(request, response){
     };
 
     posts.unshift(post);
-    response.writeHead(statusOk, {'Content-Type': 'application/json'});
-    response.end(JSON.stringify(posts));
+    sendJSON(response, post);
 });
+
 methods.set('/posts.edit', function(request, response){});
+
 methods.set('/posts.delete', function(request, response){});
 
 const server = http.createServer((request, response) => {
-    const url = new URL(request.url, `http://${request.headers.host}`);
-    const pathname = url.pathname;
-    const searchParams = url.searchParams;
+    const {pathname, searchParams} = new URL(request.url, `http://${request.headers.host}`);
     
     const method = methods.get(pathname);
     if (method === undefined){
-        response.writeHead(statusNotFound);
-        response.end();
+        sendResponse(response, {status: statusNotFound});
         return;
     }
 
-    method(request, response);
+    const params = {
+        request,
+        response,
+        pathname,
+        searchParams,
+    }
+
+    method(params);
 });
 
 server.listen(port);
